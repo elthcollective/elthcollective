@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ShoppingBag,
   User,
@@ -6,7 +6,6 @@ import {
   ChevronRight,
   ArrowLeft,
   Search,
-  BookOpen,
   Check,
   Mail,
   Lock,
@@ -20,10 +19,10 @@ import {
   GraduationCap,
   Flower,
   Star,
-  Quote,
   ShieldCheck,
   ArrowRight,
 } from "lucide-react";
+import { supabase } from "./supabase";
 
 const BRAND = {
   name: "ELTH Collective",
@@ -51,41 +50,6 @@ const COLLECTIONS = [
       "Elegant curations designed specifically for baby showers, focusing on quality, aesthetic appeal, and practical luxury for both mom and baby.",
   },
 ];
-
-const JOURNAL_POSTS = [
-  {
-    category: "Storytelling",
-    title: "The Art of Slow Parenting",
-    excerpt:
-      "In a world of constant noise, we explore how to find stillness in the early days of motherhood.",
-    date: "March 2026",
-    id: 1,
-  },
-  {
-    category: "Curation",
-    title: "Sourcing South African Artisans",
-    excerpt:
-      "The stories behind the hands that craft our organic cottons and wooden treasures.",
-    date: "February 2026",
-    id: 2,
-  },
-  {
-    category: "Wellbeing",
-    title: "Maternal Rituals for Renewal",
-    excerpt:
-      "Simple, intentional acts of self-care for the fourth trimester and beyond.",
-    date: "January 2026",
-    id: 3,
-  },
-];
-
-const PRODUCTS = COLLECTIONS.map((c) => ({
-  id: c.title.toLowerCase().replace(/\s+/g, "-"),
-  category: c.title,
-  name: `${c.title} Curation`,
-  price: c.title.includes("Maternity") ? 850 : 950,
-  imageLabel: c.title,
-}));
 
 function ElthLogo({ size = "normal", light = false }) {
   const isLarge = size === "large";
@@ -124,7 +88,7 @@ const WhatsAppIcon = ({ className }) => (
 );
 
 function manualFormatZAR(value) {
-  return `R ${value.toLocaleString("en-ZA")}`;
+  return `R ${Number(value || 0).toLocaleString("en-ZA")}`;
 }
 
 function PlaceholderImage({ label, height = "h-64", small = false }) {
@@ -138,10 +102,14 @@ function PlaceholderImage({ label, height = "h-64", small = false }) {
             <div className="text-[10px] uppercase tracking-[0.4em] text-stone-400 mb-2 font-medium">
               ELTH Collection
             </div>
-            <div className="text-sm font-light italic text-stone-700">{label}</div>
+            <div className="text-sm font-light italic text-stone-700">
+              {label}
+            </div>
           </div>
         ) : (
-          <div className="text-[7px] uppercase tracking-tighter text-stone-400 font-bold">{label}</div>
+          <div className="text-[7px] uppercase tracking-tighter text-stone-400 font-bold">
+            {label}
+          </div>
         )}
       </div>
     </div>
@@ -154,13 +122,33 @@ export default function App() {
   const [selectedMessage, setSelectedMessage] = useState("");
   const [cartOpen, setCartOpen] = useState(false);
   const [cartItems, setCartItems] = useState([]);
+  const [products, setProducts] = useState([]);
   const [toast, setToast] = useState({ open: false, text: "" });
+
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
     contact: "",
     address: "",
   });
+
+  useEffect(() => {
+    async function loadProducts() {
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("active", true);
+
+      if (error) {
+        console.error("Error loading products:", error);
+        return;
+      }
+
+      setProducts(data || []);
+    }
+
+    loadProducts();
+  }, []);
 
   const showToast = (text) => {
     setToast({ open: true, text });
@@ -184,18 +172,20 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const openJournal = () => {
-    setView("journal");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
   function addToCart(product, message) {
+    if (!product) {
+      showToast("Product not available");
+      return;
+    }
+
     const cartEntry = {
       ...product,
       cartId: `${product.id}-${Date.now()}`,
       message: message.trim() || "",
       qty: 1,
+      imageLabel: product.category || product.name,
     };
+
     setCartItems((prev) => [...prev, cartEntry]);
     setSelectedMessage("");
     setCartOpen(true);
@@ -207,9 +197,13 @@ export default function App() {
   }
 
   const isFormValid =
-    formData.firstName && formData.lastName && formData.contact && formData.address;
+    formData.firstName &&
+    formData.lastName &&
+    formData.contact &&
+    formData.address;
+
   const cartSubtotal = cartItems.reduce(
-    (s, i) => s + (i.price || 0) * (i.qty || 1),
+    (s, i) => s + (Number(i.price) || 0) * (i.qty || 1),
     0
   );
 
@@ -236,7 +230,6 @@ export default function App() {
               >
                 Collections
               </button>
-              
               <button
                 onClick={openBespoke}
                 className={`text-[10px] font-bold uppercase tracking-[0.2em] transition-colors ${
@@ -253,7 +246,9 @@ export default function App() {
           <div className="flex items-center gap-6">
             <button className="hidden sm:flex items-center gap-2 text-stone-400 hover:text-stone-900">
               <Search className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-widest">Search</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest">
+                Search
+              </span>
             </button>
             <button className="p-2 text-stone-400 hover:text-stone-900">
               <User className="w-5 h-5" />
@@ -283,7 +278,9 @@ export default function App() {
                     <PlaceholderImage label={c.title} height="h-[450px]" />
                     <div className="mt-6 border-t border-stone-100 pt-4 flex justify-between items-start">
                       <div>
-                        <h3 className="text-lg font-serif italic mb-1 tracking-tight">{c.title}</h3>
+                        <h3 className="text-lg font-serif italic mb-1 tracking-tight">
+                          {c.title}
+                        </h3>
                         <p className="text-sm text-stone-400">{c.subtitle}</p>
                       </div>
                       <ChevronRight className="w-4 h-4 text-stone-300 group-hover:translate-x-1 transition-transform mt-2" />
@@ -295,7 +292,7 @@ export default function App() {
           </section>
         )}
 
-                {view === "collection" && selectedCollection && (
+        {view === "collection" && selectedCollection && (
           <section className="py-20">
             <div className="mx-auto max-w-7xl px-6">
               <div className="grid lg:grid-cols-2 gap-20">
@@ -306,17 +303,27 @@ export default function App() {
                   >
                     <ArrowLeft className="w-3 h-3" /> Back to Collective
                   </button>
-                  <PlaceholderImage label={selectedCollection} height="h-[600px]" />
+                  <PlaceholderImage
+                    label={selectedCollection}
+                    height="h-[600px]"
+                  />
                 </div>
                 <div className="flex flex-col justify-center">
                   <h1 className="text-5xl font-serif italic mb-6 tracking-tight lowercase">
                     {selectedCollection}
                   </h1>
                   <p className="text-stone-500 font-light mb-8 leading-relaxed max-w-md">
-                    {COLLECTIONS.find((c) => c.title === selectedCollection)?.description}
+                    {
+                      COLLECTIONS.find((c) => c.title === selectedCollection)
+                        ?.description
+                    }
                   </p>
                   <p className="text-2xl font-light mb-8 text-stone-400 italic">
-                    Starting from {manualFormatZAR(PRODUCTS.find((p) => p.category === selectedCollection)?.price)}
+                    Starting from{" "}
+                    {manualFormatZAR(
+                      products.find((p) => p.category === selectedCollection)
+                        ?.price || 0
+                    )}
                   </p>
 
                   <div className="bg-white p-8 border border-stone-100 shadow-sm">
@@ -336,7 +343,9 @@ export default function App() {
                     <button
                       onClick={() =>
                         addToCart(
-                          PRODUCTS.find((p) => p.category === selectedCollection),
+                          products.find(
+                            (p) => p.category === selectedCollection
+                          ),
                           selectedMessage
                         )
                       }
@@ -358,67 +367,92 @@ export default function App() {
                 <div className="inline-block bg-stone-900 text-white p-4 rounded-full mb-8">
                   <Sparkles className="w-6 h-6" />
                 </div>
-                <h1 className="text-6xl font-serif italic mb-6 tracking-tight">Bespoke Gifting</h1>
+                <h1 className="text-6xl font-serif italic mb-6 tracking-tight">
+                  Bespoke Gifting
+                </h1>
                 <p className="text-stone-500 font-light text-lg max-w-2xl mx-auto leading-relaxed">
-                  Beyond our curated collections, we offer a high-touch service for those seeking a one-of-a-kind gifting experience. From corporate volumes to intimate, personal gestures.
+                  Beyond our curated collections, we offer a high-touch service
+                  for those seeking a one-of-a-kind gifting experience. From
+                  corporate volumes to intimate, personal gestures.
                 </p>
               </div>
 
               <div className="grid md:grid-cols-3 gap-8 mb-20">
                 <div className="bg-white p-10 border border-stone-100 text-center flex flex-col items-center group hover:shadow-xl transition-all rounded-2xl">
                   <Briefcase className="w-8 h-8 text-stone-200 mb-6 group-hover:text-stone-900 transition-colors" />
-                  <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] mb-4">Corporate Volume</h3>
+                  <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] mb-4">
+                    Corporate Volume
+                  </h3>
                   <p className="text-[13px] text-stone-400 leading-relaxed font-medium">
-                    Elevated maternity leave, staff gifts and baby welcome gifts for your team members, branded with your corporate identity.
+                    Elevated maternity leave, staff gifts and baby welcome gifts
+                    for your team members, branded with your corporate identity.
                   </p>
                 </div>
 
                 <div className="bg-white p-10 border border-stone-100 text-center flex flex-col items-center group hover:shadow-xl transition-all md:scale-105 md:z-10 shadow-lg ring-1 ring-stone-100 rounded-2xl">
                   <Feather className="w-8 h-8 text-stone-900 mb-6" />
-                  <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] mb-4">Individual Custom</h3>
+                  <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] mb-4">
+                    Individual Custom
+                  </h3>
                   <p className="text-[13px] text-stone-600 leading-relaxed font-medium mb-8">
-                    Fully tailored curations for all life stages. We source specific artisanal goods to match your unique vision.
+                    Fully tailored curations for all life stages. We source
+                    specific artisanal goods to match your unique vision.
                   </p>
                   <div className="grid grid-cols-1 gap-5 w-full text-left">
                     <div className="flex items-center gap-3">
                       <HeartPulse className="w-4 h-4 text-stone-300" />
-                      <span className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">Get Well Soon</span>
+                      <span className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">
+                        Get Well Soon
+                      </span>
                     </div>
                     <div className="flex items-center gap-3">
                       <Flower className="w-4 h-4 text-stone-300" />
-                      <span className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">The First Bloom</span>
+                      <span className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">
+                        The First Bloom
+                      </span>
                     </div>
                     <div className="flex items-center gap-3">
                       <GraduationCap className="w-4 h-4 text-stone-900" />
-                      <span className="text-[10px] uppercase tracking-widest text-stone-900 font-bold">Matric Graduation</span>
+                      <span className="text-[10px] uppercase tracking-widest text-stone-900 font-bold">
+                        Matric Graduation
+                      </span>
                     </div>
                     <div className="flex items-center gap-3">
                       <Star className="w-4 h-4 text-stone-900" />
-                      <span className="text-[10px] uppercase tracking-widest text-stone-900 font-bold">Teen</span>
+                      <span className="text-[10px] uppercase tracking-widest text-stone-900 font-bold">
+                        Teen
+                      </span>
                     </div>
                   </div>
                 </div>
 
                 <div className="bg-white p-10 border border-stone-100 text-center flex flex-col items-center group hover:shadow-xl transition-all rounded-2xl">
                   <Users className="w-8 h-8 text-stone-200 mb-6 group-hover:text-stone-900 transition-colors" />
-                  <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] mb-4">Event Favours</h3>
+                  <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] mb-4">
+                    Event Favours
+                  </h3>
                   <p className="text-[13px] text-stone-400 leading-relaxed font-medium">
-                    Miniature curations, and luxury guest favors for intimate celebrations like weddings and engagement parties.
+                    Miniature curations, and luxury guest favors for intimate
+                    celebrations like weddings and engagement parties.
                   </p>
                 </div>
               </div>
 
               <div className="bg-stone-900 text-white p-12 md:p-20 flex flex-col items-center text-center rounded-3xl">
-                <h2 className="text-3xl font-serif italic mb-6">Let's create something intentional.</h2>
+                <h2 className="text-3xl font-serif italic mb-6">
+                  Let&apos;s create something intentional.
+                </h2>
                 <p className="text-stone-400 text-sm max-w-md mb-10 leading-relaxed">
-                  Tailored specifically to your event or corporate needs. We source with care.
+                  Tailored specifically to your event or corporate needs. We
+                  source with care.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4">
                   <a
                     href={`https://wa.me/${BRAND.whatsapp}`}
                     className="bg-white text-stone-900 px-10 py-5 text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-stone-100 transition-all flex items-center gap-3 rounded-2xl"
                   >
-                    <WhatsAppIcon className="w-4 h-4 text-[#25D366]" /> Chat on WhatsApp
+                    <WhatsAppIcon className="w-4 h-4 text-[#25D366]" /> Chat on
+                    WhatsApp
                   </a>
                   <button className="border border-stone-700 text-stone-400 px-10 py-5 text-[10px] font-bold uppercase tracking-[0.3em] hover:text-white hover:border-white transition-all rounded-2xl">
                     Email Inquiry
@@ -438,7 +472,9 @@ export default function App() {
               >
                 <ArrowLeft className="w-3 h-3" /> Return to Shop
               </button>
-              <h2 className="text-4xl font-serif italic mb-12">Secure Checkout</h2>
+              <h2 className="text-4xl font-serif italic mb-12">
+                Secure Checkout
+              </h2>
               <div className="grid md:grid-cols-5 gap-16">
                 <div className="md:col-span-3 space-y-10">
                   <div>
@@ -454,7 +490,12 @@ export default function App() {
                           type="text"
                           className="w-full border-b border-stone-200 py-2 focus:outline-none"
                           value={formData.firstName}
-                          onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              firstName: e.target.value,
+                            })
+                          }
                         />
                       </div>
                       <div className="space-y-2">
@@ -465,7 +506,12 @@ export default function App() {
                           type="text"
                           className="w-full border-b border-stone-200 py-2 focus:outline-none"
                           value={formData.lastName}
-                          onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              lastName: e.target.value,
+                            })
+                          }
                         />
                       </div>
                       <div className="col-span-2 space-y-2">
@@ -476,7 +522,12 @@ export default function App() {
                           type="tel"
                           className="w-full border-b border-stone-200 py-2 focus:outline-none"
                           value={formData.contact}
-                          onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              contact: e.target.value,
+                            })
+                          }
                         />
                       </div>
                       <div className="col-span-2 space-y-2">
@@ -487,7 +538,12 @@ export default function App() {
                           rows="2"
                           className="w-full border-b border-stone-200 py-2 focus:outline-none resize-none"
                           value={formData.address}
-                          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              address: e.target.value,
+                            })
+                          }
                         />
                       </div>
                     </div>
@@ -502,11 +558,17 @@ export default function App() {
                           <ShieldCheck className="w-5 h-5" />
                         </div>
                         <div>
-                          <p className="text-xs font-bold uppercase tracking-widest">PayFast Secure</p>
-                          <p className="text-[10px] text-stone-400">Instant EFT, Credit Card</p>
+                          <p className="text-xs font-bold uppercase tracking-widest">
+                            PayFast Secure
+                          </p>
+                          <p className="text-[10px] text-stone-400">
+                            Instant EFT, Credit Card
+                          </p>
                         </div>
                       </div>
-                      <span className="text-[10px] font-bold italic text-stone-300 uppercase">PayFast</span>
+                      <span className="text-[10px] font-bold italic text-stone-300 uppercase">
+                        PayFast
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -519,12 +581,20 @@ export default function App() {
                       {cartItems.map((item) => (
                         <div key={item.cartId} className="flex gap-4">
                           <div className="w-16 h-16 shrink-0 bg-white border border-stone-100 p-1">
-                            <PlaceholderImage label={item.imageLabel} height="h-full" small />
+                            <PlaceholderImage
+                              label={item.imageLabel}
+                              height="h-full"
+                              small
+                            />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-start gap-2">
-                              <h4 className="text-[11px] font-serif italic truncate text-stone-900">{item.name}</h4>
-                              <span className="text-[10px] font-bold text-stone-900">{manualFormatZAR(item.price)}</span>
+                              <h4 className="text-[11px] font-serif italic truncate text-stone-900">
+                                {item.name}
+                              </h4>
+                              <span className="text-[10px] font-bold text-stone-900">
+                                {manualFormatZAR(item.price)}
+                              </span>
                             </div>
                             <p className="text-[9px] uppercase tracking-widest text-stone-400 font-medium">
                               Qty: {item.qty}
@@ -534,8 +604,12 @@ export default function App() {
                       ))}
                     </div>
                     <div className="border-t border-stone-200 pt-6 flex justify-between items-end">
-                      <span className="text-[10px] font-bold uppercase tracking-widest">Total</span>
-                      <span className="text-2xl font-light">{manualFormatZAR(cartSubtotal)}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest">
+                        Total
+                      </span>
+                      <span className="text-2xl font-light">
+                        {manualFormatZAR(cartSubtotal)}
+                      </span>
                     </div>
                     <button
                       disabled={!isFormValid}
@@ -575,24 +649,34 @@ export default function App() {
               </div>
             </div>
             <div>
-              <h4 className="text-[10px] font-bold uppercase tracking-[0.4em] mb-8">The Collection</h4>
+              <h4 className="text-[10px] font-bold uppercase tracking-[0.4em] mb-8">
+                The Collection
+              </h4>
               <ul className="space-y-4 text-[11px] uppercase tracking-widest text-stone-400 font-bold">
                 {COLLECTIONS.map((c) => (
                   <li key={c.title}>
-                    <button onClick={() => openCollection(c.title)} className="hover:text-stone-900 text-left">
+                    <button
+                      onClick={() => openCollection(c.title)}
+                      className="hover:text-stone-900 text-left"
+                    >
                       {c.title}
                     </button>
                   </li>
                 ))}
                 <li>
-                  <button onClick={openBespoke} className="hover:text-stone-900 text-left">
+                  <button
+                    onClick={openBespoke}
+                    className="hover:text-stone-900 text-left"
+                  >
                     Bespoke Services
                   </button>
                 </li>
               </ul>
             </div>
             <div>
-              <h4 className="text-[10px] font-bold uppercase tracking-[0.4em] mb-8">Inquiries</h4>
+              <h4 className="text-[10px] font-bold uppercase tracking-[0.4em] mb-8">
+                Inquiries
+              </h4>
               <ul className="space-y-4 text-[11px] uppercase tracking-widest text-stone-400 font-bold">
                 <li>
                   <a
@@ -604,9 +688,21 @@ export default function App() {
                     WhatsApp Support <WhatsAppIcon className="w-3 h-3" />
                   </a>
                 </li>
-                <li><button className="hover:text-stone-900 text-left">Shipping Policy</button></li>
-                <li><button className="hover:text-stone-900 text-left">Returns and Exchanges</button></li>
-                <li><button className="hover:text-stone-900 text-left">FAQ</button></li>
+                <li>
+                  <button className="hover:text-stone-900 text-left">
+                    Shipping Policy
+                  </button>
+                </li>
+                <li>
+                  <button className="hover:text-stone-900 text-left">
+                    Returns and Exchanges
+                  </button>
+                </li>
+                <li>
+                  <button className="hover:text-stone-900 text-left">
+                    FAQ
+                  </button>
+                </li>
               </ul>
             </div>
           </div>
@@ -618,11 +714,15 @@ export default function App() {
             <div className="flex gap-8 items-center">
               <div className="flex items-center gap-2 grayscale opacity-40">
                 <Truck className="w-3 h-3" />
-                <span className="text-[8px] font-bold uppercase tracking-widest">Nationwide Delivery</span>
+                <span className="text-[8px] font-bold uppercase tracking-widest">
+                  Nationwide Delivery
+                </span>
               </div>
               <div className="flex items-center gap-2 grayscale opacity-40">
                 <Lock className="w-3 h-3" />
-                <span className="text-[8px] font-bold uppercase tracking-widest">Secure Payments</span>
+                <span className="text-[8px] font-bold uppercase tracking-widest">
+                  Secure Payments
+                </span>
               </div>
             </div>
           </div>
@@ -643,10 +743,15 @@ export default function App() {
 
       {cartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-stone-900/60 backdrop-blur-sm" onClick={() => setCartOpen(false)} />
+          <div
+            className="absolute inset-0 bg-stone-900/60 backdrop-blur-sm"
+            onClick={() => setCartOpen(false)}
+          />
           <div className="relative w-full max-w-md bg-white h-full flex flex-col shadow-2xl">
             <div className="p-10 border-b flex justify-between items-center">
-              <h2 className="text-xs font-bold uppercase tracking-[0.5em]">Your Selection</h2>
+              <h2 className="text-xs font-bold uppercase tracking-[0.5em]">
+                Your Selection
+              </h2>
               <button onClick={() => setCartOpen(false)}>
                 <X className="w-5 h-5" />
               </button>
@@ -661,14 +766,23 @@ export default function App() {
                 </div>
               ) : (
                 cartItems.map((item) => (
-                  <div key={item.cartId} className="flex flex-col border-b border-stone-100 pb-8 last:border-0">
+                  <div
+                    key={item.cartId}
+                    className="flex flex-col border-b border-stone-100 pb-8 last:border-0"
+                  >
                     <div className="flex justify-between items-start mb-4 gap-4">
                       <div className="flex gap-4">
                         <div className="w-16 h-16 shrink-0 border border-stone-100 p-1 bg-stone-50">
-                          <PlaceholderImage label={item.imageLabel} height="h-full" small />
+                          <PlaceholderImage
+                            label={item.imageLabel}
+                            height="h-full"
+                            small
+                          />
                         </div>
                         <div>
-                          <h3 className="font-serif italic text-lg leading-tight lowercase">{item.name}</h3>
+                          <h3 className="font-serif italic text-lg leading-tight lowercase">
+                            {item.name}
+                          </h3>
                           <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
                             {manualFormatZAR(item.price)}
                           </p>
@@ -684,7 +798,9 @@ export default function App() {
                     {item.message && (
                       <div className="bg-stone-50 p-4 border-l-2 border-stone-200 flex gap-3 items-start">
                         <Gift className="w-3 h-3 text-stone-300 mt-0.5" />
-                        <span className="text-[11px] italic text-stone-600">“{item.message}”</span>
+                        <span className="text-[11px] italic text-stone-600">
+                          “{item.message}”
+                        </span>
                       </div>
                     )}
                   </div>
@@ -694,8 +810,12 @@ export default function App() {
             {cartItems.length > 0 && (
               <div className="p-10 border-t bg-white">
                 <div className="flex justify-between mb-8">
-                  <span className="text-xs font-bold uppercase tracking-widest text-stone-400">Subtotal</span>
-                  <span className="text-xl font-light tracking-tighter">{manualFormatZAR(cartSubtotal)}</span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-stone-400">
+                    Subtotal
+                  </span>
+                  <span className="text-xl font-light tracking-tighter">
+                    {manualFormatZAR(cartSubtotal)}
+                  </span>
                 </div>
                 <button
                   onClick={() => {
@@ -714,7 +834,9 @@ export default function App() {
 
       <div
         className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 ${
-          toast.open ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8 pointer-events-none"
+          toast.open
+            ? "opacity-100 translate-y-0"
+            : "opacity-0 translate-y-8 pointer-events-none"
         }`}
       >
         <div className="bg-stone-900 text-white px-8 py-4 text-[10px] font-bold uppercase tracking-[0.4em] shadow-2xl flex items-center gap-4 rounded-2xl">
