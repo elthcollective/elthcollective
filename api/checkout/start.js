@@ -32,35 +32,77 @@ module.exports = async function handler(req, res) {
 
   try {
     const body = await readJsonBody(req);
+    console.log("BODY RECEIVED:", JSON.stringify(body, null, 2));
 
-    console.log("🔥 BODY RECEIVED:", JSON.stringify(body, null, 2));
-
+    const customerName = String(body.customerName || "").trim();
+    const customerEmail = String(body.customerEmail || "").trim();
+    const customerPhone = String(body.customerPhone || "").trim();
+    const fulfilmentMethod = String(body.fulmentMethod || body.fulfilmentMethod || "").trim();
+    const deliveryAddress = body.deliveryAddress || null;
+    const collectionPoint = body.collectionPoint || null;
     const items = Array.isArray(body.items) ? body.items : [];
+
+    if (!customerName || !customerEmail || !customerPhone) {
+      return res.status(400).json({ error: "Missing customer details" });
+    }
 
     if (!items.length) {
       return res.status(400).json({ error: "No items in order" });
     }
 
+    if (!["delivery", "collection"].includes(fulfilmentMethod)) {
+      return res.status(400).json({ error: "Invalid fulfilment method" });
+    }
+
+    if (fulfilmentMethod === "delivery") {
+      if (
+        !deliveryAddress ||
+        !String(deliveryAddress.line1 || "").trim() ||
+        !String(deliveryAddress.suburb || "").trim() ||
+        !String(deliveryAddress.city || "").trim() ||
+        !String(deliveryAddress.postalCode || "").trim()
+      ) {
+        return res.status(400).json({ error: "Missing delivery details" });
+      }
+    }
+
+    if (fulfilmentMethod === "collection") {
+      if (
+        !String(collectionPoint || "").trim() ||
+        String(collectionPoint || "").trim() === "Select collection point"
+      ) {
+        return res.status(400).json({ error: "Missing collection point" });
+      }
+    }
+
     let itemsTotal = 0;
 
-    const cleanedItems = items.map((item, index) => {
-      console.log(`🧩 ITEM ${index}:`, item);
+    for (let i = 0; i < items.length; i++) {
+      const quantity = Number(items[i].quantity || 0);
+      const unitPrice = Number(items[i].price || 0);
 
-      const quantity = Number(item.quantity || 1);
-      const unitPrice = Number(item.price);
+      if (!Number.isFinite(quantity) || quantity < 1) {
+        return res.status(400).json({ error: `Invalid quantity for item ${i + 1}` });
+      }
 
-      if (!Number.isFinite(unitPrice)) {
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) {
         return res.status(400).json({
-          error: "PRICE IS MISSING FROM FRONTEND",
-          item,
+          error: `Invalid price for item ${i + 1}`,
+          item: items[i],
         });
       }
 
       itemsTotal += quantity * unitPrice;
+    }
+
+    const cleanedItems = items.map((item) => {
+      const quantity = Number(item.quantity || 1);
+      const unitPrice = Number(item.price || 0);
 
       return {
+        order_id: null,
         product_id: null,
-        product_name: String(item.name || item.id || "Product"),
+        product_name: String(item.name || item.id || "Product").trim(),
         qty: quantity,
         quantity: quantity,
         unit_price: Number(unitPrice.toFixed(2)),
@@ -71,59 +113,111 @@ module.exports = async function handler(req, res) {
 
     const customNote =
       cleanedItems
-        .filter((i) => i.gift_message)
-        .map((i) => `${i.product_name}: ${i.gift_message}`)
+        .filter((item) => item.gift_message)
+        .map((item) => `${item.product_name}: ${item.gift_message}`)
         .join(" | ") || null;
 
-    const grandTotal = Number(itemsTotal.toFixed(2));
+    const deliveryFee = fulfilmentMethod === "delivery" ? 80 : 0;
+    const collectionFee = 0;
+    const grandTotal = Number((itemsTotal + deliveryFee + collectionFee).toFixed(2));
+
+    const orderPayload = {
+      customer_name: customerName,
+      customer_email: customerEmail,
+      customer_phone: customerPhone,
+      fulfilment_method: fulfilmentMethod,
+      delivery_address_line1:
+        fulfilmentMethod === "delivery"
+          ? String(deliveryAddress.line1 || "").trim()
+          : null,
+      delivery_address_line2:
+        fulfilmentMethod === "delivery"
+          ? String(deliveryAddress.line2 || "").trim()
+          : null,
+      delivery_suburb:
+        fulfilmentMethod === "delivery"
+          ? String(deliveryAddress.suburb || "").trim()
+          : null,
+      delivery_city:
+        fulfilmentMethod === "delivery"
+          ? String(deliveryAddress.city || "").trim()
+          : null,
+      delivery_postal_code:
+        fulfilmentMethod === "delivery"
+          ? String(deliveryAddress.postalCode || "").trim()
+          : null,
+      collection_point:
+        fulfilmentMethod === "collection"
+          ? String(collectionPoint || "").trim()
+          : null,
+      total: grandTotal,
+      items_total: Number(itemsTotal.toFixed(2)),
+      delivery_fee: Number(deliveryFee.toFixed(2)),
+      collection_fee: Number(collectionFee.toFixed(2)),
+      grand_total: grandTotal,
+      currency: "ZAR",
+      payment_status: "pending",
+      order_status: "pending",
+      payment_provider: "pending_payfast_setup",
+      custom_note: customNote,
+    };
+
+    console.log("ORDER PAYLOAD:", JSON.stringify(orderPayload, null, 2));
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from("orders")
-      .insert({
-        total: grandTotal,
-        custom_note: customNote,
-        payment_status: "pending",
-        order_status: "pending",
-      })
+      .insert(orderPayload)
       .select()
       .single();
 
-    if (orderError) {
-      return res.status(500).json({ error: orderError.message });
+    if (orderError || !order) {
+      console.log("ORDER ERROR:", orderError);
+      return res.status(500).json({
+        error: orderError?.message || "Failed to create order",
+      });
     }
 
     const itemsPayload = cleanedItems.map((item) => ({
+      ...item,
       order_id: order.id,
-      product_id: item.product_id,
-      product_name: item.product_name,
-      qty: item.qty,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-      price: item.price,
-      gift_message: item.gift_message,
     }));
 
-    console.log("🚀 FINAL ITEMS PAYLOAD:", itemsPayload);
+    console.log("ITEMS PAYLOAD:", JSON.stringify(itemsPayload, null, 2));
 
-    const { error: itemsError } = await supabaseAdmin
+    const badItem = itemsPayload.find(
+      (item) => !Number.isFinite(item.unit_price) || item.unit_price === null
+    );
+
+    if (badItem) {
+      return res.status(500).json({
+        error: "unit_price is missing before insert",
+        badItem,
+      });
+    }
+
+    const { data: insertedItems, error: itemsError } = await supabaseAdmin
       .from("order_items")
-      .insert(itemsPayload);
+      .insert(itemsPayload)
+      .select();
 
     if (itemsError) {
+      console.log("ITEMS ERROR:", itemsError);
       return res.status(500).json({
         error: itemsError.message,
-        payload: itemsPayload,
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: "ORDER + ITEMS SAVED ✅",
+      orderId: order.id,
+      message: "Order and order items saved as pending",
+      customNote,
+      insertedItems,
     });
   } catch (error) {
-    console.error(error);
+    console.error("SERVER ERROR:", error);
     return res.status(500).json({
-      error: error.message,
+      error: error instanceof Error ? error.message : "Server error",
     });
   }
 };
