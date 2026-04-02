@@ -26,17 +26,12 @@ function readJsonBody(req) {
 }
 
 module.exports = async function handler(req, res) {
-  console.log("API route loaded");
-
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    console.log("POST request received");
-
     const body = await readJsonBody(req);
-    console.log("Body received:", body);
 
     const customerName = String(body.customerName || "").trim();
     const customerEmail = String(body.customerEmail || "").trim();
@@ -81,33 +76,26 @@ module.exports = async function handler(req, res) {
 
     let itemsTotal = 0;
 
-    const orderItems = items.map((item) => {
+    for (const item of items) {
       const quantity = Number(item.quantity || 0);
       const unitPrice = Number(item.price || 0);
 
       if (!quantity || quantity < 1) {
-        throw new Error("Invalid quantity in order");
+        return res.status(400).json({ error: "Invalid quantity in order" });
       }
 
-      if (unitPrice < 0) {
-        throw new Error("Invalid price in order");
+      if (Number.isNaN(unitPrice) || unitPrice < 0) {
+        return res.status(400).json({ error: "Invalid price in order" });
       }
 
-      itemsTotal += unitPrice * quantity;
+      itemsTotal += quantity * unitPrice;
+    }
 
-      return {
-        product_id: null,
-        product_name: String(item.name || item.id || "Product").trim(),
-        quantity,
-        unit_price: Number(unitPrice.toFixed(2)),
-        gift_message: String(item.message || "").trim() || null,
-      };
-    });
-
-    const customNote = orderItems
-      .filter((item) => item.gift_message)
-      .map((item) => `${item.product_name}: ${item.gift_message}`)
-      .join(" | ") || null;
+    const customNote =
+      items
+        .map((item) => String(item.message || "").trim())
+        .filter(Boolean)
+        .join(" | ") || null;
 
     const deliveryFee = fulfilmentMethod === "delivery" ? 80 : 0;
     const collectionFee = 0;
@@ -158,31 +146,24 @@ module.exports = async function handler(req, res) {
       .select()
       .single();
 
-    console.log("Order result:", order);
-    console.log("Order error:", orderError);
-
     if (orderError || !order) {
       return res.status(500).json({
         error: orderError?.message || "Failed to create order",
       });
     }
 
-    const itemsPayload = orderItems.map((item) => ({
+    const itemsPayload = items.map((item) => ({
       order_id: order.id,
-      product_id: item.product_id,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
+      product_id: null,
+      quantity: Number(item.quantity || 1),
+      unit_price: Number(Number(item.price || 0).toFixed(2)),
     }));
 
-    console.log("Items payload:", itemsPayload);
+    console.log("itemsPayload:", itemsPayload);
 
-    const { data: insertedItems, error: itemsError } = await supabaseAdmin
+    const { error: itemsError } = await supabaseAdmin
       .from("order_items")
-      .insert(itemsPayload)
-      .select();
-
-    console.log("Inserted items:", insertedItems);
-    console.log("Items error:", itemsError);
+      .insert(itemsPayload);
 
     if (itemsError) {
       return res.status(500).json({ error: itemsError.message });
