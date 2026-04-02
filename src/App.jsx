@@ -210,16 +210,14 @@ export default function App() {
     formData.email.trim() &&
     formData.contact.trim() &&
     formData.method &&
-    (
-      (formData.method === "delivery" &&
-        formData.addressLine1.trim() &&
-        formData.suburb.trim() &&
-        formData.city.trim() &&
-        formData.postalCode.trim()) ||
+    ((formData.method === "delivery" &&
+      formData.addressLine1.trim() &&
+      formData.suburb.trim() &&
+      formData.city.trim() &&
+      formData.postalCode.trim()) ||
       (formData.method === "collection" &&
         formData.collectionPoint &&
-        formData.collectionPoint !== "Select collection point")
-    );
+        formData.collectionPoint !== "Select collection point"));
 
   const moveToCheckout = () => {
     setCartOpen(false);
@@ -292,7 +290,7 @@ export default function App() {
     try {
       setCheckoutLoading(true);
 
-      const response = await fetch("/api/checkout/start", {
+      const response = await fetch("http://localhost:3001/api/checkout/start", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -314,11 +312,12 @@ export default function App() {
               : null,
           collectionPoint:
             formData.method === "collection" ? formData.collectionPoint : null,
-          deliveryFee: formData.method === "delivery" ? DELIVERY_FEE : 0,
-          collectionFee: formData.method === "collection" ? COLLECTION_FEE : 0,
           items: cartItems.map((item) => ({
             id: item.id,
+            name: item.name,
             quantity: item.qty,
+            price: item.price,
+            message: item.message || "",
           })),
         }),
       });
@@ -326,32 +325,33 @@ export default function App() {
       const data = await response.json();
 
       if (!response.ok) {
-        alert(data.error || "Failed to start checkout");
+        alert(data.error || "Failed to save order");
         return;
       }
 
-      if (!data.paymentUrl || !data.fields) {
-        alert("Payment setup is incomplete");
-        return;
-      }
+      alert(`Order saved successfully. Order number: ${data.orderId}. Payment is not connected yet.`);
 
-      const form = document.createElement("form");
-      form.method = "POST";
-      form.action = data.paymentUrl;
+      setCartItems([]);
+      setCartOpen(false);
+      setCheckoutStep("details");
+      setView("home");
 
-      Object.entries(data.fields).forEach(([key, value]) => {
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = key;
-        input.value = String(value);
-        form.appendChild(input);
+      setFormData({
+        firstName: "",
+        lastName: "",
+        email: "",
+        contact: "",
+        method: "",
+        addressLine1: "",
+        addressLine2: "",
+        suburb: "",
+        city: "",
+        postalCode: "",
+        collectionPoint: "Select collection point",
       });
-
-      document.body.appendChild(form);
-      form.submit();
     } catch (error) {
       console.error(error);
-      alert("Something went wrong while starting payment");
+      alert("Something went wrong while saving the order");
     } finally {
       setCheckoutLoading(false);
     }
@@ -585,7 +585,7 @@ export default function App() {
 
               <div className="bg-stone-900 text-white p-12 md:p-20 flex flex-col items-center text-center rounded-3xl">
                 <h2 className="text-3xl font-serif italic mb-6">
-                  Let's create something intentional.
+                  Let us create something intentional.
                 </h2>
                 <p className="text-stone-400 text-sm max-w-md mb-10 leading-relaxed">
                   Tailored specifically to your event or corporate needs. We source
@@ -985,7 +985,7 @@ export default function App() {
 
                     <div className="bg-white p-8 border border-stone-100 rounded-2xl">
                       <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] mb-6 pb-2 border-b">
-                        Payment Method
+                        Order Status
                       </h3>
 
                       <div className="border border-stone-200 p-6 flex items-center justify-between rounded-sm">
@@ -995,15 +995,15 @@ export default function App() {
                           </div>
                           <div>
                             <p className="text-xs font-bold uppercase tracking-widest">
-                              PayFast Secure
+                              Save Pending Order
                             </p>
                             <p className="text-[10px] text-stone-400">
-                              Instant EFT, Credit Card
+                              Payment is not connected yet
                             </p>
                           </div>
                         </div>
                         <span className="text-[10px] font-bold italic text-stone-300 uppercase">
-                          PayFast
+                          Pending
                         </span>
                       </div>
                     </div>
@@ -1027,7 +1027,7 @@ export default function App() {
                             : "bg-stone-900 text-white hover:bg-stone-800"
                         }`}
                       >
-                        {checkoutLoading ? "Preparing..." : "Pay Securely with PayFast"}{" "}
+                        {checkoutLoading ? "Saving..." : "Save Order"}{" "}
                         <ArrowRight className="w-3 h-3" />
                       </button>
                     </div>
@@ -1184,7 +1184,7 @@ export default function App() {
               <div className="flex items-center gap-2 grayscale opacity-40">
                 <Lock className="w-3 h-3" />
                 <span className="text-[8px] font-bold uppercase tracking-widest">
-                  Secure Payments
+                  Secure Records
                 </span>
               </div>
             </div>

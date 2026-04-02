@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ShoppingBag,
   User,
@@ -22,7 +22,6 @@ import {
   ShieldCheck,
   ArrowRight,
 } from "lucide-react";
-import { supabase } from "./supabase";
 
 const BRAND = {
   name: "ELTH Collective",
@@ -49,6 +48,22 @@ const COLLECTIONS = [
     description:
       "Elegant curations designed specifically for baby showers, focusing on quality, aesthetic appeal, and practical luxury for both mom and baby.",
   },
+];
+
+const PRODUCTS = COLLECTIONS.map((c) => ({
+  id: c.title.toLowerCase().replace(/\s+/g, "-"),
+  category: c.title,
+  name: `${c.title} Curation`,
+  price: c.title.includes("Maternity") ? 850 : 950,
+  imageLabel: c.title,
+}));
+
+const DELIVERY_FEE = 80;
+const COLLECTION_FEE = 0;
+
+const COLLECTION_POINTS = [
+  "Select collection point",
+  "Collection points coming soon",
 ];
 
 function ElthLogo({ size = "normal", light = false }) {
@@ -102,9 +117,7 @@ function PlaceholderImage({ label, height = "h-64", small = false }) {
             <div className="text-[10px] uppercase tracking-[0.4em] text-stone-400 mb-2 font-medium">
               ELTH Collection
             </div>
-            <div className="text-sm font-light italic text-stone-700">
-              {label}
-            </div>
+            <div className="text-sm font-light italic text-stone-700">{label}</div>
           </div>
         ) : (
           <div className="text-[7px] uppercase tracking-tighter text-stone-400 font-bold">
@@ -122,33 +135,23 @@ export default function App() {
   const [selectedMessage, setSelectedMessage] = useState("");
   const [cartOpen, setCartOpen] = useState(false);
   const [cartItems, setCartItems] = useState([]);
-  const [products, setProducts] = useState([]);
   const [toast, setToast] = useState({ open: false, text: "" });
+  const [checkoutStep, setCheckoutStep] = useState("details");
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
+    email: "",
     contact: "",
-    address: "",
+    method: "",
+    addressLine1: "",
+    addressLine2: "",
+    suburb: "",
+    city: "",
+    postalCode: "",
+    collectionPoint: "Select collection point",
   });
-
-  useEffect(() => {
-    async function loadProducts() {
-      const { data, error } = await supabase
-        .from("products")
-        .select("*")
-        .eq("active", true);
-
-      if (error) {
-        console.error("Error loading products:", error);
-        return;
-      }
-
-      setProducts(data || []);
-    }
-
-    loadProducts();
-  }, []);
 
   const showToast = (text) => {
     setToast({ open: true, text });
@@ -158,6 +161,7 @@ export default function App() {
   const goHome = () => {
     setView("home");
     setSelectedCollection(null);
+    setCheckoutStep("details");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -173,19 +177,12 @@ export default function App() {
   };
 
   function addToCart(product, message) {
-    if (!product) {
-      showToast("Product not available");
-      return;
-    }
-
     const cartEntry = {
       ...product,
       cartId: `${product.id}-${Date.now()}`,
       message: message.trim() || "",
       qty: 1,
-      imageLabel: product.category || product.name,
     };
-
     setCartItems((prev) => [...prev, cartEntry]);
     setSelectedMessage("");
     setCartOpen(true);
@@ -196,16 +193,171 @@ export default function App() {
     setCartItems((prev) => prev.filter((x) => x.cartId !== cartId));
   }
 
-  const isFormValid =
-    formData.firstName &&
-    formData.lastName &&
-    formData.contact &&
-    formData.address;
+  const itemsTotal = cartItems.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0);
 
-  const cartSubtotal = cartItems.reduce(
-    (s, i) => s + (Number(i.price) || 0) * (i.qty || 1),
-    0
-  );
+  const fulfilmentFee =
+    formData.method === "delivery"
+      ? DELIVERY_FEE
+      : formData.method === "collection"
+      ? COLLECTION_FEE
+      : 0;
+
+  const grandTotal = itemsTotal + fulfilmentFee;
+
+  const isDetailsValid =
+    formData.firstName.trim() &&
+    formData.lastName.trim() &&
+    formData.email.trim() &&
+    formData.contact.trim() &&
+    formData.method &&
+    (
+      (formData.method === "delivery" &&
+        formData.addressLine1.trim() &&
+        formData.suburb.trim() &&
+        formData.city.trim() &&
+        formData.postalCode.trim()) ||
+      (formData.method === "collection" &&
+        formData.collectionPoint &&
+        formData.collectionPoint !== "Select collection point")
+    );
+
+  const moveToCheckout = () => {
+    setCartOpen(false);
+    setView("checkout");
+    setCheckoutStep("details");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const goToPaymentStep = () => {
+    if (!formData.firstName.trim()) {
+      alert("Please enter your full name");
+      return;
+    }
+
+    if (!formData.lastName.trim()) {
+      alert("Please enter your surname");
+      return;
+    }
+
+    if (!formData.email.trim()) {
+      alert("Please enter your email address");
+      return;
+    }
+
+    if (!formData.contact.trim()) {
+      alert("Please enter your contact number");
+      return;
+    }
+
+    if (!formData.method) {
+      alert("Please choose delivery or collection");
+      return;
+    }
+
+    if (formData.method === "delivery") {
+      if (!formData.addressLine1.trim()) {
+        alert("Please enter address line 1");
+        return;
+      }
+
+      if (!formData.suburb.trim()) {
+        alert("Please enter your suburb");
+        return;
+      }
+
+      if (!formData.city.trim()) {
+        alert("Please enter your city");
+        return;
+      }
+
+      if (!formData.postalCode.trim()) {
+        alert("Please enter your postal code");
+        return;
+      }
+    }
+
+    if (
+      formData.method === "collection" &&
+      (!formData.collectionPoint || formData.collectionPoint === "Select collection point")
+    ) {
+      alert("Please choose a collection point");
+      return;
+    }
+
+    setCheckoutStep("payment");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handlePayfastCheckout = async () => {
+    try {
+      setCheckoutLoading(true);
+
+      const response = await fetch("/api/checkout/start", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          customerName: `${formData.firstName} ${formData.lastName}`.trim(),
+          customerEmail: formData.email.trim(),
+          customerPhone: formData.contact.trim(),
+          fulfilmentMethod: formData.method,
+          deliveryAddress:
+            formData.method === "delivery"
+              ? {
+                  line1: formData.addressLine1.trim(),
+                  line2: formData.addressLine2.trim(),
+                  suburb: formData.suburb.trim(),
+                  city: formData.city.trim(),
+                  postalCode: formData.postalCode.trim(),
+                }
+              : null,
+          collectionPoint:
+            formData.method === "collection" ? formData.collectionPoint : null,
+          items: cartItems.map((item) => ({
+            id: item.id,
+            name: item.name,
+            quantity: item.qty,
+            price: item.price,
+            message: item.message || "",
+          })),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || "Failed to save order");
+        return;
+      }
+
+      alert(`Order saved successfully. Order number: ${data.orderId}. Payment is not connected yet.`);
+
+      setCartItems([]);
+      setCartOpen(false);
+      setCheckoutStep("details");
+      setView("home");
+
+      setFormData({
+        firstName: "",
+        lastName: "",
+        email: "",
+        contact: "",
+        method: "",
+        addressLine1: "",
+        addressLine2: "",
+        suburb: "",
+        city: "",
+        postalCode: "",
+        collectionPoint: "Select collection point",
+      });
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong while saving the order");
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#fcfcfc] text-stone-900 flex flex-col font-sans selection:bg-stone-200">
@@ -230,6 +382,7 @@ export default function App() {
               >
                 Collections
               </button>
+
               <button
                 onClick={openBespoke}
                 className={`text-[10px] font-bold uppercase tracking-[0.2em] transition-colors ${
@@ -303,10 +456,7 @@ export default function App() {
                   >
                     <ArrowLeft className="w-3 h-3" /> Back to Collective
                   </button>
-                  <PlaceholderImage
-                    label={selectedCollection}
-                    height="h-[600px]"
-                  />
+                  <PlaceholderImage label={selectedCollection} height="h-[600px]" />
                 </div>
                 <div className="flex flex-col justify-center">
                   <h1 className="text-5xl font-serif italic mb-6 tracking-tight lowercase">
@@ -321,8 +471,7 @@ export default function App() {
                   <p className="text-2xl font-light mb-8 text-stone-400 italic">
                     Starting from{" "}
                     {manualFormatZAR(
-                      products.find((p) => p.category === selectedCollection)
-                        ?.price || 0
+                      PRODUCTS.find((p) => p.category === selectedCollection)?.price
                     )}
                   </p>
 
@@ -343,9 +492,7 @@ export default function App() {
                     <button
                       onClick={() =>
                         addToCart(
-                          products.find(
-                            (p) => p.category === selectedCollection
-                          ),
+                          PRODUCTS.find((p) => p.category === selectedCollection),
                           selectedMessage
                         )
                       }
@@ -371,9 +518,9 @@ export default function App() {
                   Bespoke Gifting
                 </h1>
                 <p className="text-stone-500 font-light text-lg max-w-2xl mx-auto leading-relaxed">
-                  Beyond our curated collections, we offer a high-touch service
-                  for those seeking a one-of-a-kind gifting experience. From
-                  corporate volumes to intimate, personal gestures.
+                  Beyond our curated collections, we offer a high-touch service for
+                  those seeking a one-of-a-kind gifting experience. From corporate
+                  volumes to intimate, personal gestures.
                 </p>
               </div>
 
@@ -384,8 +531,8 @@ export default function App() {
                     Corporate Volume
                   </h3>
                   <p className="text-[13px] text-stone-400 leading-relaxed font-medium">
-                    Elevated maternity leave, staff gifts and baby welcome gifts
-                    for your team members, branded with your corporate identity.
+                    Elevated maternity leave, staff gifts and baby welcome gifts for
+                    your team members, branded with your corporate identity.
                   </p>
                 </div>
 
@@ -395,8 +542,8 @@ export default function App() {
                     Individual Custom
                   </h3>
                   <p className="text-[13px] text-stone-600 leading-relaxed font-medium mb-8">
-                    Fully tailored curations for all life stages. We source
-                    specific artisanal goods to match your unique vision.
+                    Fully tailored curations for all life stages. We source specific
+                    artisanal goods to match your unique vision.
                   </p>
                   <div className="grid grid-cols-1 gap-5 w-full text-left">
                     <div className="flex items-center gap-3">
@@ -440,11 +587,11 @@ export default function App() {
 
               <div className="bg-stone-900 text-white p-12 md:p-20 flex flex-col items-center text-center rounded-3xl">
                 <h2 className="text-3xl font-serif italic mb-6">
-                  Let&apos;s create something intentional.
+                  Let's create something intentional.
                 </h2>
                 <p className="text-stone-400 text-sm max-w-md mb-10 leading-relaxed">
-                  Tailored specifically to your event or corporate needs. We
-                  source with care.
+                  Tailored specifically to your event or corporate needs. We source
+                  with care.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4">
                   <a
@@ -465,165 +612,490 @@ export default function App() {
 
         {view === "checkout" && (
           <section className="py-20">
-            <div className="mx-auto max-w-4xl px-6">
+            <div className="mx-auto max-w-5xl px-6">
               <button
                 onClick={goHome}
                 className="flex items-center gap-4 text-stone-400 mb-12 hover:text-stone-900 transition-colors text-[10px] font-bold uppercase tracking-[0.3em]"
               >
                 <ArrowLeft className="w-3 h-3" /> Return to Shop
               </button>
-              <h2 className="text-4xl font-serif italic mb-12">
-                Secure Checkout
-              </h2>
-              <div className="grid md:grid-cols-5 gap-16">
-                <div className="md:col-span-3 space-y-10">
-                  <div>
-                    <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] text-stone-900 mb-8 pb-2 border-b">
-                      1. Delivery Details
-                    </h3>
-                    <div className="grid grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <label className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">
-                          First Name *
-                        </label>
-                        <input
-                          type="text"
-                          className="w-full border-b border-stone-200 py-2 focus:outline-none"
-                          value={formData.firstName}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              firstName: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">
-                          Surname *
-                        </label>
-                        <input
-                          type="text"
-                          className="w-full border-b border-stone-200 py-2 focus:outline-none"
-                          value={formData.lastName}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              lastName: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="col-span-2 space-y-2">
-                        <label className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">
-                          Contact Number *
-                        </label>
-                        <input
-                          type="tel"
-                          className="w-full border-b border-stone-200 py-2 focus:outline-none"
-                          value={formData.contact}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              contact: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="col-span-2 space-y-2">
-                        <label className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">
-                          Delivery Address (Collection Hub) *
-                        </label>
-                        <textarea
-                          rows="2"
-                          className="w-full border-b border-stone-200 py-2 focus:outline-none resize-none"
-                          value={formData.address}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              address: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                    </div>
+
+              <div className="mb-10">
+                <h2 className="text-4xl font-serif italic mb-4">Checkout</h2>
+                <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.3em]">
+                  <div
+                    className={`px-4 py-2 rounded-full border ${
+                      checkoutStep === "details"
+                        ? "border-stone-900 text-stone-900"
+                        : "border-stone-200 text-stone-400"
+                    }`}
+                  >
+                    1. Customer Details
                   </div>
-                  <div>
-                    <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] text-stone-900 mb-8 pb-2 border-b">
-                      2. Payment Method
-                    </h3>
-                    <div className="border border-stone-200 p-6 flex items-center justify-between rounded-sm">
-                      <div className="flex items-center gap-4">
-                        <div className="bg-stone-900 text-white p-2 rounded">
-                          <ShieldCheck className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold uppercase tracking-widest">
-                            PayFast Secure
-                          </p>
-                          <p className="text-[10px] text-stone-400">
-                            Instant EFT, Credit Card
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-bold italic text-stone-300 uppercase">
-                        PayFast
-                      </span>
-                    </div>
+                  <div
+                    className={`px-4 py-2 rounded-full border ${
+                      checkoutStep === "payment"
+                        ? "border-stone-900 text-stone-900"
+                        : "border-stone-200 text-stone-400"
+                    }`}
+                  >
+                    2. Payment Summary
                   </div>
                 </div>
-                <div className="md:col-span-2 space-y-8">
-                  <div className="bg-stone-50 p-8 border border-stone-100 rounded-2xl">
-                    <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] mb-8 pb-4 border-b border-stone-200/60">
-                      Summary
-                    </h3>
-                    <div className="space-y-6 mb-8">
-                      {cartItems.map((item) => (
-                        <div key={item.cartId} className="flex gap-4">
-                          <div className="w-16 h-16 shrink-0 bg-white border border-stone-100 p-1">
-                            <PlaceholderImage
-                              label={item.imageLabel}
-                              height="h-full"
-                              small
+              </div>
+
+              {checkoutStep === "details" && (
+                <div className="grid md:grid-cols-5 gap-16">
+                  <div className="md:col-span-3 space-y-10">
+                    <div>
+                      <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] text-stone-900 mb-8 pb-2 border-b">
+                        Customer Details
+                      </h3>
+
+                      <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">
+                            First Name *
+                          </label>
+                          <input
+                            type="text"
+                            className="w-full border-b border-stone-200 py-2 focus:outline-none"
+                            value={formData.firstName}
+                            onChange={(e) =>
+                              setFormData({ ...formData, firstName: e.target.value })
+                            }
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">
+                            Surname *
+                          </label>
+                          <input
+                            type="text"
+                            className="w-full border-b border-stone-200 py-2 focus:outline-none"
+                            value={formData.lastName}
+                            onChange={(e) =>
+                              setFormData({ ...formData, lastName: e.target.value })
+                            }
+                          />
+                        </div>
+
+                        <div className="col-span-2 space-y-2">
+                          <label className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">
+                            Email Address *
+                          </label>
+                          <input
+                            type="email"
+                            className="w-full border-b border-stone-200 py-2 focus:outline-none"
+                            value={formData.email}
+                            onChange={(e) =>
+                              setFormData({ ...formData, email: e.target.value })
+                            }
+                          />
+                        </div>
+
+                        <div className="col-span-2 space-y-2">
+                          <label className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">
+                            Contact Number *
+                          </label>
+                          <input
+                            type="tel"
+                            className="w-full border-b border-stone-200 py-2 focus:outline-none"
+                            value={formData.contact}
+                            onChange={(e) =>
+                              setFormData({ ...formData, contact: e.target.value })
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] text-stone-900 mb-8 pb-2 border-b">
+                        Delivery or Collection
+                      </h3>
+
+                      <div className="grid grid-cols-2 gap-4 mb-8">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFormData({
+                              ...formData,
+                              method: "delivery",
+                              collectionPoint: "Select collection point",
+                            })
+                          }
+                          className={`border p-5 rounded-2xl text-[10px] font-bold uppercase tracking-[0.3em] transition-all ${
+                            formData.method === "delivery"
+                              ? "border-stone-900 text-stone-900 bg-stone-50"
+                              : "border-stone-200 text-stone-400"
+                          }`}
+                        >
+                          Delivery
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFormData({
+                              ...formData,
+                              method: "collection",
+                              addressLine1: "",
+                              addressLine2: "",
+                              suburb: "",
+                              city: "",
+                              postalCode: "",
+                            })
+                          }
+                          className={`border p-5 rounded-2xl text-[10px] font-bold uppercase tracking-[0.3em] transition-all ${
+                            formData.method === "collection"
+                              ? "border-stone-900 text-stone-900 bg-stone-50"
+                              : "border-stone-200 text-stone-400"
+                          }`}
+                        >
+                          Collection
+                        </button>
+                      </div>
+
+                      {formData.method === "delivery" && (
+                        <div className="grid grid-cols-2 gap-6">
+                          <div className="col-span-2 space-y-2">
+                            <label className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">
+                              Address Line 1 *
+                            </label>
+                            <input
+                              type="text"
+                              className="w-full border-b border-stone-200 py-2 focus:outline-none"
+                              value={formData.addressLine1}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  addressLine1: e.target.value,
+                                })
+                              }
                             />
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start gap-2">
-                              <h4 className="text-[11px] font-serif italic truncate text-stone-900">
-                                {item.name}
-                              </h4>
-                              <span className="text-[10px] font-bold text-stone-900">
-                                {manualFormatZAR(item.price)}
-                              </span>
-                            </div>
-                            <p className="text-[9px] uppercase tracking-widest text-stone-400 font-medium">
-                              Qty: {item.qty}
-                            </p>
+
+                          <div className="col-span-2 space-y-2">
+                            <label className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">
+                              Address Line 2
+                            </label>
+                            <input
+                              type="text"
+                              className="w-full border-b border-stone-200 py-2 focus:outline-none"
+                              value={formData.addressLine2}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  addressLine2: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">
+                              Suburb *
+                            </label>
+                            <input
+                              type="text"
+                              className="w-full border-b border-stone-200 py-2 focus:outline-none"
+                              value={formData.suburb}
+                              onChange={(e) =>
+                                setFormData({ ...formData, suburb: e.target.value })
+                              }
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">
+                              City *
+                            </label>
+                            <input
+                              type="text"
+                              className="w-full border-b border-stone-200 py-2 focus:outline-none"
+                              value={formData.city}
+                              onChange={(e) =>
+                                setFormData({ ...formData, city: e.target.value })
+                              }
+                            />
+                          </div>
+
+                          <div className="col-span-2 space-y-2">
+                            <label className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">
+                              Postal Code *
+                            </label>
+                            <input
+                              type="text"
+                              className="w-full border-b border-stone-200 py-2 focus:outline-none"
+                              value={formData.postalCode}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  postalCode: e.target.value,
+                                })
+                              }
+                            />
                           </div>
                         </div>
-                      ))}
+                      )}
+
+                      {formData.method === "collection" && (
+                        <div className="space-y-3">
+                          <label className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">
+                            Collection Point *
+                          </label>
+                          <select
+                            className="w-full border-b border-stone-200 py-3 focus:outline-none bg-transparent"
+                            value={formData.collectionPoint}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                collectionPoint: e.target.value,
+                              })
+                            }
+                          >
+                            {COLLECTION_POINTS.map((point) => (
+                              <option key={point} value={point}>
+                                {point}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-[10px] text-stone-400 uppercase tracking-widest font-bold">
+                            Collection points will be added at a future date
+                          </p>
+                        </div>
+                      )}
                     </div>
-                    <div className="border-t border-stone-200 pt-6 flex justify-between items-end">
-                      <span className="text-[10px] font-bold uppercase tracking-widest">
-                        Total
-                      </span>
-                      <span className="text-2xl font-light">
-                        {manualFormatZAR(cartSubtotal)}
-                      </span>
-                    </div>
+
                     <button
-                      disabled={!isFormValid}
-                      className={`w-full mt-10 py-5 text-[10px] font-bold uppercase tracking-[0.3em] flex items-center justify-center gap-3 transition-all shadow-md rounded-2xl ${
-                        isFormValid
+                      type="button"
+                      onClick={goToPaymentStep}
+                      disabled={!isDetailsValid}
+                      className={`w-full py-5 text-[10px] font-bold uppercase tracking-[0.3em] flex items-center justify-center gap-3 transition-all shadow-md rounded-2xl ${
+                        isDetailsValid
                           ? "bg-stone-900 text-white hover:bg-stone-800"
                           : "bg-stone-200 text-stone-400 cursor-not-allowed"
                       }`}
                     >
-                      Pay Securely <ArrowRight className="w-3 h-3" />
+                      Payment <ArrowRight className="w-3 h-3" />
                     </button>
                   </div>
+
+                  <div className="md:col-span-2 space-y-8">
+                    <div className="bg-stone-50 p-8 border border-stone-100 rounded-2xl">
+                      <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] mb-8 pb-4 border-b border-stone-200/60">
+                        Summary
+                      </h3>
+
+                      <div className="space-y-6 mb-8">
+                        {cartItems.map((item) => (
+                          <div key={item.cartId} className="flex gap-4">
+                            <div className="w-16 h-16 shrink-0 bg-white border border-stone-100 p-1">
+                              <PlaceholderImage label={item.imageLabel} height="h-full" small />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-start gap-2">
+                                <h4 className="text-[11px] font-serif italic truncate text-stone-900">
+                                  {item.name}
+                                </h4>
+                                <span className="text-[10px] font-bold text-stone-900">
+                                  {manualFormatZAR(item.price)}
+                                </span>
+                              </div>
+                              <p className="text-[9px] uppercase tracking-widest text-stone-400 font-medium">
+                                Qty: {item.qty}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="border-t border-stone-200 pt-6 space-y-3">
+                        <div className="flex justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
+                            Items Total
+                          </span>
+                          <span className="text-[10px] font-bold text-stone-900">
+                            {manualFormatZAR(itemsTotal)}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
+                            Delivery or Collection Fee
+                          </span>
+                          <span className="text-[10px] font-bold text-stone-900">
+                            {manualFormatZAR(fulfilmentFee)}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between items-end pt-2">
+                          <span className="text-[10px] font-bold uppercase tracking-widest">
+                            Total
+                          </span>
+                          <span className="text-2xl font-light">
+                            {manualFormatZAR(grandTotal)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {checkoutStep === "payment" && (
+                <div className="grid md:grid-cols-5 gap-16">
+                  <div className="md:col-span-3 space-y-8">
+                    <div className="bg-white p-8 border border-stone-100 rounded-2xl">
+                      <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] mb-6 pb-2 border-b">
+                        Contact Details
+                      </h3>
+                      <div className="space-y-2 text-sm text-stone-700">
+                        <p>{formData.firstName} {formData.lastName}</p>
+                        <p>{formData.email}</p>
+                        <p>{formData.contact}</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-8 border border-stone-100 rounded-2xl">
+                      <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] mb-6 pb-2 border-b">
+                        Delivery or Collection
+                      </h3>
+
+                      <div className="space-y-2 text-sm text-stone-700">
+                        <p className="uppercase tracking-widest text-[10px] font-bold text-stone-400">
+                          {formData.method}
+                        </p>
+
+                        {formData.method === "delivery" && (
+                          <>
+                            <p>{formData.addressLine1}</p>
+                            {formData.addressLine2 ? <p>{formData.addressLine2}</p> : null}
+                            <p>{formData.suburb}</p>
+                            <p>{formData.city}</p>
+                            <p>{formData.postalCode}</p>
+                          </>
+                        )}
+
+                        {formData.method === "collection" && (
+                          <p>{formData.collectionPoint}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-8 border border-stone-100 rounded-2xl">
+                      <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] mb-6 pb-2 border-b">
+                        Payment Method
+                      </h3>
+
+                      <div className="border border-stone-200 p-6 flex items-center justify-between rounded-sm">
+                        <div className="flex items-center gap-4">
+                          <div className="bg-stone-900 text-white p-2 rounded">
+                            <ShieldCheck className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-widest">
+                              Order Save
+                            </p>
+                            <p className="text-[10px] text-stone-400">
+                              Payment not connected yet
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold italic text-stone-300 uppercase">
+                          Pending
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <button
+                        type="button"
+                        onClick={() => setCheckoutStep("details")}
+                        className="w-full border border-stone-200 py-5 text-[10px] font-bold uppercase tracking-[0.3em] rounded-2xl"
+                      >
+                        Back
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handlePayfastCheckout}
+                        disabled={checkoutLoading}
+                        className={`w-full py-5 text-[10px] font-bold uppercase tracking-[0.3em] flex items-center justify-center gap-3 transition-all shadow-md rounded-2xl ${
+                          checkoutLoading
+                            ? "bg-stone-200 text-stone-400 cursor-not-allowed"
+                            : "bg-stone-900 text-white hover:bg-stone-800"
+                        }`}
+                      >
+                        {checkoutLoading ? "Saving..." : "Save Order"}{" "}
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-2 space-y-8">
+                    <div className="bg-stone-50 p-8 border border-stone-100 rounded-2xl">
+                      <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] mb-8 pb-4 border-b border-stone-200/60">
+                        Payment Summary
+                      </h3>
+
+                      <div className="space-y-6 mb-8">
+                        {cartItems.map((item) => (
+                          <div key={item.cartId} className="flex gap-4">
+                            <div className="w-16 h-16 shrink-0 bg-white border border-stone-100 p-1">
+                              <PlaceholderImage label={item.imageLabel} height="h-full" small />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-start gap-2">
+                                <h4 className="text-[11px] font-serif italic truncate text-stone-900">
+                                  {item.name}
+                                </h4>
+                                <span className="text-[10px] font-bold text-stone-900">
+                                  {manualFormatZAR(item.price)}
+                                </span>
+                              </div>
+                              <p className="text-[9px] uppercase tracking-widest text-stone-400 font-medium">
+                                Qty: {item.qty}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="border-t border-stone-200 pt-6 space-y-3">
+                        <div className="flex justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
+                            Items Total
+                          </span>
+                          <span className="text-[10px] font-bold text-stone-900">
+                            {manualFormatZAR(itemsTotal)}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
+                            {formData.method === "delivery" ? "Delivery Fee" : "Collection Fee"}
+                          </span>
+                          <span className="text-[10px] font-bold text-stone-900">
+                            {manualFormatZAR(fulfilmentFee)}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between items-end pt-2">
+                          <span className="text-[10px] font-bold uppercase tracking-widest">
+                            Total
+                          </span>
+                          <span className="text-2xl font-light">
+                            {manualFormatZAR(grandTotal)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -664,10 +1136,7 @@ export default function App() {
                   </li>
                 ))}
                 <li>
-                  <button
-                    onClick={openBespoke}
-                    className="hover:text-stone-900 text-left"
-                  >
+                  <button onClick={openBespoke} className="hover:text-stone-900 text-left">
                     Bespoke Services
                   </button>
                 </li>
@@ -689,9 +1158,7 @@ export default function App() {
                   </a>
                 </li>
                 <li>
-                  <button className="hover:text-stone-900 text-left">
-                    Shipping Policy
-                  </button>
+                  <button className="hover:text-stone-900 text-left">Shipping Policy</button>
                 </li>
                 <li>
                   <button className="hover:text-stone-900 text-left">
@@ -699,9 +1166,7 @@ export default function App() {
                   </button>
                 </li>
                 <li>
-                  <button className="hover:text-stone-900 text-left">
-                    FAQ
-                  </button>
+                  <button className="hover:text-stone-900 text-left">FAQ</button>
                 </li>
               </ul>
             </div>
@@ -773,11 +1238,7 @@ export default function App() {
                     <div className="flex justify-between items-start mb-4 gap-4">
                       <div className="flex gap-4">
                         <div className="w-16 h-16 shrink-0 border border-stone-100 p-1 bg-stone-50">
-                          <PlaceholderImage
-                            label={item.imageLabel}
-                            height="h-full"
-                            small
-                          />
+                          <PlaceholderImage label={item.imageLabel} height="h-full" small />
                         </div>
                         <div>
                           <h3 className="font-serif italic text-lg leading-tight lowercase">
@@ -814,14 +1275,11 @@ export default function App() {
                     Subtotal
                   </span>
                   <span className="text-xl font-light tracking-tighter">
-                    {manualFormatZAR(cartSubtotal)}
+                    {manualFormatZAR(itemsTotal)}
                   </span>
                 </div>
                 <button
-                  onClick={() => {
-                    setCartOpen(false);
-                    setView("checkout");
-                  }}
+                  onClick={moveToCheckout}
                   className="w-full bg-stone-900 text-white py-5 text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-stone-800 shadow-xl transition-all rounded-2xl"
                 >
                   Proceed to Checkout
