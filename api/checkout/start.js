@@ -76,25 +76,37 @@ module.exports = async function handler(req, res) {
 
     let itemsTotal = 0;
 
-    for (const item of items) {
+    const cleanedItems = items.map((item) => {
       const quantity = Number(item.quantity || 0);
       const unitPrice = Number(item.price || 0);
+      const productName = String(item.name || item.id || "Product").trim();
+      const giftMessage = String(item.message || "").trim() || null;
 
       if (!quantity || quantity < 1) {
-        return res.status(400).json({ error: "Invalid quantity in order" });
+        throw new Error("Invalid quantity in order");
       }
 
       if (Number.isNaN(unitPrice) || unitPrice < 0) {
-        return res.status(400).json({ error: "Invalid price in order" });
+        throw new Error("Invalid price in order");
       }
 
       itemsTotal += quantity * unitPrice;
-    }
+
+      return {
+        product_id: null,
+        product_name: productName,
+        qty: quantity,
+        quantity: quantity,
+        unit_price: Number(unitPrice.toFixed(2)),
+        price: Number(unitPrice.toFixed(2)),
+        gift_message: giftMessage,
+      };
+    });
 
     const customNote =
-      items
-        .map((item) => String(item.message || "").trim())
-        .filter(Boolean)
+      cleanedItems
+        .filter((item) => item.gift_message)
+        .map((item) => `${item.product_name}: ${item.gift_message}`)
         .join(" | ") || null;
 
     const deliveryFee = fulfilmentMethod === "delivery" ? 80 : 0;
@@ -152,18 +164,26 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const itemsPayload = items.map((item) => ({
+    const itemsPayload = cleanedItems.map((item) => ({
       order_id: order.id,
-      product_id: null,
-      quantity: Number(item.quantity || 1),
-      unit_price: Number(Number(item.price || 0).toFixed(2)),
+      product_id: item.product_id,
+      product_name: item.product_name,
+      qty: item.qty,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      price: item.price,
+      gift_message: item.gift_message,
     }));
 
     console.log("itemsPayload:", itemsPayload);
 
-    const { error: itemsError } = await supabaseAdmin
+    const { data: insertedItems, error: itemsError } = await supabaseAdmin
       .from("order_items")
-      .insert(itemsPayload);
+      .insert(itemsPayload)
+      .select();
+
+    console.log("insertedItems:", insertedItems);
+    console.log("itemsError:", itemsError);
 
     if (itemsError) {
       return res.status(500).json({ error: itemsError.message });
