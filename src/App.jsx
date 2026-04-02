@@ -210,14 +210,16 @@ export default function App() {
     formData.email.trim() &&
     formData.contact.trim() &&
     formData.method &&
-    ((formData.method === "delivery" &&
-      formData.addressLine1.trim() &&
-      formData.suburb.trim() &&
-      formData.city.trim() &&
-      formData.postalCode.trim()) ||
+    (
+      (formData.method === "delivery" &&
+        formData.addressLine1.trim() &&
+        formData.suburb.trim() &&
+        formData.city.trim() &&
+        formData.postalCode.trim()) ||
       (formData.method === "collection" &&
         formData.collectionPoint &&
-        formData.collectionPoint !== "Select collection point"));
+        formData.collectionPoint !== "Select collection point")
+    );
 
   const moveToCheckout = () => {
     setCartOpen(false);
@@ -290,7 +292,7 @@ export default function App() {
     try {
       setCheckoutLoading(true);
 
-      const response = await fetch("http://localhost:3001/api/checkout/start", {
+      const response = await fetch("/api/checkout/start", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -585,7 +587,7 @@ export default function App() {
 
               <div className="bg-stone-900 text-white p-12 md:p-20 flex flex-col items-center text-center rounded-3xl">
                 <h2 className="text-3xl font-serif italic mb-6">
-                  Let us create something intentional.
+                  Let's create something intentional.
                 </h2>
                 <p className="text-stone-400 text-sm max-w-md mb-10 leading-relaxed">
                   Tailored specifically to your event or corporate needs. We source
@@ -985,7 +987,7 @@ export default function App() {
 
                     <div className="bg-white p-8 border border-stone-100 rounded-2xl">
                       <h3 className="text-[10px] font-bold uppercase tracking-[0.4em] mb-6 pb-2 border-b">
-                        Order Status
+                        Payment Method
                       </h3>
 
                       <div className="border border-stone-200 p-6 flex items-center justify-between rounded-sm">
@@ -995,10 +997,10 @@ export default function App() {
                           </div>
                           <div>
                             <p className="text-xs font-bold uppercase tracking-widest">
-                              Save Pending Order
+                              Order Save
                             </p>
                             <p className="text-[10px] text-stone-400">
-                              Payment is not connected yet
+                              Payment not connected yet
                             </p>
                           </div>
                         </div>
@@ -1184,7 +1186,7 @@ export default function App() {
               <div className="flex items-center gap-2 grayscale opacity-40">
                 <Lock className="w-3 h-3" />
                 <span className="text-[8px] font-bold uppercase tracking-widest">
-                  Secure Records
+                  Secure Payments
                 </span>
               </div>
             </div>
