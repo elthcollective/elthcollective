@@ -146,12 +146,14 @@ module.exports = async function handler(req, res) {
           fulfilmentMethod === "collection"
             ? String(collectionPoint || "").trim()
             : null,
+        total: grandTotal,
         items_total: Number(itemsTotal.toFixed(2)),
         delivery_fee: Number(deliveryFee.toFixed(2)),
         collection_fee: Number(collectionFee.toFixed(2)),
         grand_total: grandTotal,
         currency: "ZAR",
-        status: "pending",
+        payment_status: "pending",
+        order_status: "pending",
         payment_provider: "pending_payfast_setup",
       })
       .select()
@@ -166,16 +168,18 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const { error: itemsError } = await supabaseAdmin.from("order_items").insert(
-      orderItems.map((item) => ({
-        order_id: order.id,
-        product_id: item.product_id,
-        product_name: item.product_name,
-        quantity: item.quantity,
-        price: item.price,
-        gift_message: item.gift_message,
-      }))
-    );
+    const { error: itemsError } = await supabaseAdmin
+      .from("order_items")
+      .insert(
+        orderItems.map((item) => ({
+          order_id: order.id,
+          product_id: item.product_id,
+          product_name: item.product_name,
+          quantity: item.quantity,
+          price: item.price,
+          gift_message: item.gift_message,
+        }))
+      );
 
     console.log("Items error:", itemsError);
 
