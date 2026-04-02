@@ -26,12 +26,17 @@ function readJsonBody(req) {
 }
 
 module.exports = async function handler(req, res) {
+  console.log("API route loaded");
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
+    console.log("POST request received");
+
     const body = await readJsonBody(req);
+    console.log("Body received:", body);
 
     const customerName = String(body.customerName || "").trim();
     const customerEmail = String(body.customerEmail || "").trim();
@@ -42,14 +47,17 @@ module.exports = async function handler(req, res) {
     const items = Array.isArray(body.items) ? body.items : [];
 
     if (!customerName || !customerEmail || !customerPhone) {
+      console.log("Missing customer details");
       return res.status(400).json({ error: "Missing customer details" });
     }
 
     if (!items.length) {
+      console.log("No items in order");
       return res.status(400).json({ error: "No items in order" });
     }
 
     if (!["delivery", "collection"].includes(fulfilmentMethod)) {
+      console.log("Invalid fulfilment method");
       return res.status(400).json({ error: "Invalid fulfilment method" });
     }
 
@@ -61,6 +69,7 @@ module.exports = async function handler(req, res) {
         !String(deliveryAddress.city || "").trim() ||
         !String(deliveryAddress.postalCode || "").trim()
       ) {
+        console.log("Missing delivery details");
         return res.status(400).json({ error: "Missing delivery details" });
       }
     }
@@ -70,48 +79,41 @@ module.exports = async function handler(req, res) {
         !String(collectionPoint || "").trim() ||
         String(collectionPoint || "").trim() === "Select collection point"
       ) {
+        console.log("Missing collection point");
         return res.status(400).json({ error: "Missing collection point" });
       }
     }
 
     let itemsTotal = 0;
 
-    const cleanedItems = items.map((item) => {
+    const orderItems = items.map((item) => {
       const quantity = Number(item.quantity || 0);
-      const unitPrice = Number(item.price || 0);
-      const productName = String(item.name || item.id || "Product").trim();
-      const giftMessage = String(item.message || "").trim() || null;
+      const price = Number(item.price || 0);
 
       if (!quantity || quantity < 1) {
         throw new Error("Invalid quantity in order");
       }
 
-      if (Number.isNaN(unitPrice) || unitPrice < 0) {
+      if (price < 0) {
         throw new Error("Invalid price in order");
       }
 
-      itemsTotal += quantity * unitPrice;
+      itemsTotal += price * quantity;
 
       return {
         product_id: null,
-        product_name: productName,
-        qty: quantity,
-        quantity: quantity,
-        unit_price: Number(unitPrice.toFixed(2)),
-        price: Number(unitPrice.toFixed(2)),
-        gift_message: giftMessage,
+        product_name: String(item.name || item.id || "Product"),
+        quantity,
+        price: Number(price.toFixed(2)),
+        gift_message: String(item.message || "").trim() || null,
       };
     });
-
-    const customNote =
-      cleanedItems
-        .filter((item) => item.gift_message)
-        .map((item) => `${item.product_name}: ${item.gift_message}`)
-        .join(" | ") || null;
 
     const deliveryFee = fulfilmentMethod === "delivery" ? 80 : 0;
     const collectionFee = 0;
     const grandTotal = Number((itemsTotal + deliveryFee + collectionFee).toFixed(2));
+
+    console.log("About to insert order");
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from("orders")
@@ -153,10 +155,12 @@ module.exports = async function handler(req, res) {
         payment_status: "pending",
         order_status: "pending",
         payment_provider: "pending_payfast_setup",
-        custom_note: customNote,
       })
       .select()
       .single();
+
+    console.log("Order result:", order);
+    console.log("Order error:", orderError);
 
     if (orderError || !order) {
       return res.status(500).json({
@@ -164,26 +168,20 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const itemsPayload = cleanedItems.map((item) => ({
-      order_id: order.id,
-      product_id: item.product_id,
-      product_name: item.product_name,
-      qty: item.qty,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-      price: item.price,
-      gift_message: item.gift_message,
-    }));
-
-    console.log("itemsPayload:", itemsPayload);
-
-    const { data: insertedItems, error: itemsError } = await supabaseAdmin
+    const { error: itemsError } = await supabaseAdmin
       .from("order_items")
-      .insert(itemsPayload)
-      .select();
+      .insert(
+        orderItems.map((item) => ({
+          order_id: order.id,
+          product_id: item.product_id,
+          product_name: item.product_name,
+          quantity: item.quantity,
+          price: item.price,
+          gift_message: item.gift_message,
+        }))
+      );
 
-    console.log("insertedItems:", insertedItems);
-    console.log("itemsError:", itemsError);
+    console.log("Items error:", itemsError);
 
     if (itemsError) {
       return res.status(500).json({ error: itemsError.message });
@@ -192,7 +190,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({
       success: true,
       orderId: order.id,
-      message: "Order and order items saved as pending",
+      message: "Order saved as pending",
     });
   } catch (error) {
     console.error("Server error:", error);
