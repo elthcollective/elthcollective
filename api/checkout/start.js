@@ -77,9 +77,8 @@ module.exports = async function handler(req, res) {
     let itemsTotal = 0;
 
     const cleanedItems = items.map((item, index) => {
-      const quantity = Number(item.quantity);
-      const rawPrice = item.price;
-      const unitPrice = Number(rawPrice);
+      const quantity = Number(item.quantity || 0);
+      const unitPrice = Number(item.price || 0);
 
       if (!Number.isFinite(quantity) || quantity < 1) {
         throw new Error(`Invalid quantity for item ${index + 1}`);
@@ -160,6 +159,7 @@ module.exports = async function handler(req, res) {
     if (orderError || !order) {
       return res.status(500).json({
         error: orderError?.message || "Failed to create order",
+        marker: "ELTH_API_V3_ORDER_FAILED",
       });
     }
 
@@ -174,40 +174,31 @@ module.exports = async function handler(req, res) {
       gift_message: item.gift_message,
     }));
 
-    console.log("itemsPayload before insert:", JSON.stringify(itemsPayload, null, 2));
-
-    const badItem = itemsPayload.find(
-      (item) => !Number.isFinite(item.unit_price) || item.unit_price === null
-    );
-
-    if (badItem) {
-      return res.status(500).json({
-        error: "unit_price is missing before insert",
-        badItem,
-      });
-    }
-
     const { data: insertedItems, error: itemsError } = await supabaseAdmin
       .from("order_items")
       .insert(itemsPayload)
       .select();
 
-    console.log("insertedItems:", insertedItems);
-    console.log("itemsError:", itemsError);
-
     if (itemsError) {
-      return res.status(500).json({ error: itemsError.message });
+      return res.status(500).json({
+        error: itemsError.message,
+        marker: "ELTH_API_V3_ITEMS_FAILED",
+        itemsPayload,
+      });
     }
 
     return res.status(200).json({
       success: true,
       orderId: order.id,
-      message: "Order and order items saved as pending",
+      message: "ELTH_API_V3_SUCCESS",
+      customNote,
+      insertedItems,
     });
   } catch (error) {
     console.error("Server error:", error);
     return res.status(500).json({
       error: error instanceof Error ? error.message : "Server error",
+      marker: "ELTH_API_V3_CATCH",
     });
   }
 };
