@@ -101,7 +101,7 @@ module.exports = async function handler(req, res) {
       itemsTotal += price * quantity;
 
       return {
-        product_id: String(item.id || ""),
+        product_id: null,
         product_name: String(item.name || item.id || "Product"),
         quantity,
         price: Number(price.toFixed(2)),
@@ -123,17 +123,29 @@ module.exports = async function handler(req, res) {
         customer_phone: customerPhone,
         fulfilment_method: fulfilmentMethod,
         delivery_address_line1:
-          fulfilmentMethod === "delivery" ? String(deliveryAddress.line1 || "").trim() : null,
+          fulfilmentMethod === "delivery"
+            ? String(deliveryAddress.line1 || "").trim()
+            : null,
         delivery_address_line2:
-          fulfilmentMethod === "delivery" ? String(deliveryAddress.line2 || "").trim() : null,
+          fulfilmentMethod === "delivery"
+            ? String(deliveryAddress.line2 || "").trim()
+            : null,
         delivery_suburb:
-          fulfilmentMethod === "delivery" ? String(deliveryAddress.suburb || "").trim() : null,
+          fulfilmentMethod === "delivery"
+            ? String(deliveryAddress.suburb || "").trim()
+            : null,
         delivery_city:
-          fulfilmentMethod === "delivery" ? String(deliveryAddress.city || "").trim() : null,
+          fulfilmentMethod === "delivery"
+            ? String(deliveryAddress.city || "").trim()
+            : null,
         delivery_postal_code:
-          fulfilmentMethod === "delivery" ? String(deliveryAddress.postalCode || "").trim() : null,
+          fulfilmentMethod === "delivery"
+            ? String(deliveryAddress.postalCode || "").trim()
+            : null,
         collection_point:
-          fulfilmentMethod === "collection" ? String(collectionPoint || "").trim() : null,
+          fulfilmentMethod === "collection"
+            ? String(collectionPoint || "").trim()
+            : null,
         items_total: Number(itemsTotal.toFixed(2)),
         delivery_fee: Number(deliveryFee.toFixed(2)),
         collection_fee: Number(collectionFee.toFixed(2)),
@@ -157,7 +169,7 @@ module.exports = async function handler(req, res) {
     const { error: itemsError } = await supabaseAdmin.from("order_items").insert(
       orderItems.map((item) => ({
         order_id: order.id,
-        product_id: item.product_id || null,
+        product_id: item.product_id,
         product_name: item.product_name,
         quantity: item.quantity,
         price: item.price,
