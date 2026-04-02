@@ -76,30 +76,29 @@ module.exports = async function handler(req, res) {
 
     let itemsTotal = 0;
 
-    const cleanedItems = items.map((item) => {
-      const quantity = Number(item.quantity || 0);
-      const unitPrice = Number(item.price || 0);
-      const productName = String(item.name || item.id || "Product").trim();
-      const giftMessage = String(item.message || "").trim() || null;
+    const cleanedItems = items.map((item, index) => {
+      const quantity = Number(item.quantity);
+      const rawPrice = item.price;
+      const unitPrice = Number(rawPrice);
 
-      if (!quantity || quantity < 1) {
-        throw new Error("Invalid quantity in order");
+      if (!Number.isFinite(quantity) || quantity < 1) {
+        throw new Error(`Invalid quantity for item ${index + 1}`);
       }
 
-      if (Number.isNaN(unitPrice) || unitPrice < 0) {
-        throw new Error("Invalid price in order");
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+        throw new Error(`Invalid unit price for item ${index + 1}`);
       }
 
       itemsTotal += quantity * unitPrice;
 
       return {
         product_id: null,
-        product_name: productName,
+        product_name: String(item.name || item.id || "Product").trim(),
         qty: quantity,
         quantity: quantity,
         unit_price: Number(unitPrice.toFixed(2)),
         price: Number(unitPrice.toFixed(2)),
-        gift_message: giftMessage,
+        gift_message: String(item.message || "").trim() || null,
       };
     });
 
@@ -175,7 +174,18 @@ module.exports = async function handler(req, res) {
       gift_message: item.gift_message,
     }));
 
-    console.log("itemsPayload:", itemsPayload);
+    console.log("itemsPayload before insert:", JSON.stringify(itemsPayload, null, 2));
+
+    const badItem = itemsPayload.find(
+      (item) => !Number.isFinite(item.unit_price) || item.unit_price === null
+    );
+
+    if (badItem) {
+      return res.status(500).json({
+        error: "unit_price is missing before insert",
+        badItem,
+      });
+    }
 
     const { data: insertedItems, error: itemsError } = await supabaseAdmin
       .from("order_items")
