@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 
 function payfastProcessUrl() {
-  return process.env.PAYFAST_SANDBOX === "true"
+  return  import.meta.env.PAYFAST_SANDBOX === "true"
     ? "https://sandbox.payfast.co.za/eng/process"
     : "https://www.payfast.co.za/eng/process";
 }
@@ -23,7 +23,7 @@ function buildSignature(data, passphrase = "") {
 }
 
 function formFields(fields) {
-  const signature = buildSignature(fields, process.env.PAYFAST_PASSPHRASE || "");
+  const signature = buildSignature(fields,  import.meta.env.PAYFAST_PASSPHRASE || "");
   return {
     ...fields,
     signature,

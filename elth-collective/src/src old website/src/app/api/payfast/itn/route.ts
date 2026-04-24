@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
 
     const generatedSignature = buildPayfastSignature(
       signatureFields,
-      process.env.PAYFAST_PASSPHRASE || ""
+       import.meta.env.PAYFAST_PASSPHRASE || ""
     );
 
     if (!receivedSignature || receivedSignature !== generatedSignature) {

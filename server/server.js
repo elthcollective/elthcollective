@@ -4,7 +4,7 @@ import cors from "cors";
 import { supabaseAdmin } from "./_lib/supabase.js";
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT =  import.meta.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());

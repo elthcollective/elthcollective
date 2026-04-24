@@ -28,7 +28,7 @@ module.exports = async function handler(req, res) {
     const receivedSignature = String(payload.signature || "");
     const generatedSignature = buildSignature(
       payload,
-      process.env.PAYFAST_PASSPHRASE || ""
+       import.meta.env.PAYFAST_PASSPHRASE || ""
     );
 
     if (!receivedSignature || receivedSignature !== generatedSignature) {

@@ -189,10 +189,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL!;
-    const merchantId = process.env.PAYFAST_MERCHANT_ID!;
-    const merchantKey = process.env.PAYFAST_MERCHANT_KEY!;
-    const passphrase = process.env.PAYFAST_PASSPHRASE || "";
+    const siteUrl =  import.meta.env.NEXT_PUBLIC_SITE_URL!;
+    const merchantId =  import.meta.env.PAYFAST_MERCHANT_ID!;
+    const merchantKey =  import.meta.env.PAYFAST_MERCHANT_KEY!;
+    const passphrase =  import.meta.env.PAYFAST_PASSPHRASE || "";
 
     const payfastFields = buildPayfastFormPayload(
       {

@@ -3,13 +3,13 @@ import crypto from "crypto";
 export type PayfastFieldMap = Record<string, string>;
 
 export function payfastProcessUrl() {
-  return process.env.PAYFAST_SANDBOX === "true"
+  return  import.meta.env.PAYFAST_SANDBOX === "true"
     ? "https://sandbox.payfast.co.za/eng/process"
     : "https://www.payfast.co.za/eng/process";
 }
 
 export function payfastValidateUrl() {
-  return process.env.PAYFAST_SANDBOX === "true"
+  return  import.meta.env.PAYFAST_SANDBOX === "true"
     ? "https://sandbox.payfast.co.za/eng/query/validate"
     : "https://www.payfast.co.za/eng/query/validate";
 }
