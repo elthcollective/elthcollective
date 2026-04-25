@@ -4,7 +4,7 @@ import cors from "cors";
 import { supabaseAdmin } from "./_lib/supabase.js";
 
 const app = express();
-const PORT =  import.meta.env.PORT || 3001;
+const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
@@ -144,6 +144,8 @@ app.post("/api/checkout/start", async (req, res) => {
           product_id: item.product_id,
           product_name: item.product_name,
           quantity: item.quantity,
+          qty: item.quantity,
+          unit_price: item.price,
           price: item.price,
           gift_message: item.gift_message,
         }))
