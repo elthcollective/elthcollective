@@ -20,12 +20,16 @@ import {
   Star,
   ShieldCheck,
   ArrowRight,
+  Instagram,
+  Facebook,
 } from "lucide-react";
 
 const BRAND = {
   name: "ELTH Collective",
   announcement: "Intentional Gifting. Nationwide Courier to your nearest hub.",
   whatsapp: "27123456789",
+  facebook: "https://www.facebook.com/elthcollective",
+  instagram: "https://www.instagram.com/elthcollective",
 };
 
 const COLLECTIONS = [
@@ -1103,6 +1107,22 @@ export default function App() {
             <div className="md:col-span-2">
               <ElthLogo size="large" />
               <div className="mt-8 flex gap-6">
+                <a
+                  href={BRAND.facebook}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-stone-400 hover:text-stone-900 transition-colors"
+                >
+                  <Facebook className="w-5 h-5" />
+                </a>
+                <a
+                  href={BRAND.instagram}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-stone-400 hover:text-stone-900 transition-colors"
+                >
+                  <Instagram className="w-5 h-5" />
+                </a>
                 <button className="text-stone-400 hover:text-stone-900 transition-colors">
                   <Mail className="w-5 h-5" />
                 </button>
