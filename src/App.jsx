@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   ShoppingBag,
-  User,
   X,
   ChevronRight,
   ArrowLeft,
@@ -402,9 +401,6 @@ export default function App() {
               <span className="text-[10px] font-bold uppercase tracking-widest">
                 Search
               </span>
-            </button>
-            <button className="p-2 text-stone-400 hover:text-stone-900">
-              <User className="w-5 h-5" />
             </button>
             <button
               onClick={() => setCartOpen(true)}
