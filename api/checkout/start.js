@@ -116,6 +116,7 @@ export default async function handler(req, res) {
       customer_name: customerName,
       customer_email: customerEmail,
       customer_phone: customerPhone,
+      user_id: body.userId || null,
       fulfilment_method: fulfilmentMethod,
       delivery_address_line1:
         fulfilmentMethod === "delivery"

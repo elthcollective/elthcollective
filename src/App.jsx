@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ShoppingBag,
   User,
@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   ArrowRight,
 } from "lucide-react";
+import { supabase } from "./supabaseClient";
 
 const BRAND = {
   name: "ELTH Collective",
@@ -138,6 +139,12 @@ export default function App() {
   const [toast, setToast] = useState({ open: false, text: "" });
   const [checkoutStep, setCheckoutStep] = useState("details");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [user, setUser] = useState(null);
+  const [authPanelOpen, setAuthPanelOpen] = useState(false);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authMessage, setAuthMessage] = useState("");
 
   const [formData, setFormData] = useState({
     firstName: "",
@@ -156,6 +163,79 @@ export default function App() {
   const showToast = (text) => {
     setToast({ open: true, text });
     setTimeout(() => setToast({ open: false, text: "" }), 3000);
+  };
+
+  useEffect(() => {
+    async function loadSession() {
+      const { data } = await supabase.auth.getSession();
+      const currentUser = data?.session?.user ?? null;
+      setUser(currentUser);
+      if (currentUser?.email) {
+        setFormData((prev) => ({ ...prev, email: prev.email || currentUser.email }));
+      }
+    }
+
+    loadSession();
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      if (currentUser?.email) {
+        setFormData((prev) => ({ ...prev, email: prev.email || currentUser.email }));
+      }
+    });
+
+    return () => listener?.subscription?.unsubscribe();
+  }, []);
+
+  const handleLogin = async () => {
+    setAuthMessage("");
+    setAuthLoading(true);
+
+    if (!authEmail.trim()) {
+      setAuthMessage("Enter your email.");
+      setAuthLoading(false);
+      return;
+    }
+
+    if (!authPassword.trim()) {
+      setAuthMessage("Enter your password.");
+      setAuthLoading(false);
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: authEmail.trim(),
+      password: authPassword,
+    });
+
+    if (error) {
+      setAuthMessage(error.message);
+    } else {
+      setAuthMessage("Logged in successfully.");
+      setAuthPanelOpen(false);
+      setAuthPassword("");
+    }
+
+    setAuthLoading(false);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setAuthMessage("Logged out.");
+    setAuthPanelOpen(false);
+  };
+
+  const openAuthPanel = () => {
+    setAuthPanelOpen(true);
+    setAuthMessage("");
+  };
+
+  const shopAsGuest = () => {
+    setUser(null);
+    setAuthPanelOpen(false);
+    setAuthMessage("Continuing as guest.");
   };
 
   const goHome = () => {
@@ -321,6 +401,7 @@ export default function App() {
             price: item.price,
             message: item.message || "",
           })),
+          userId: user?.id || null,
         }),
       });
 
@@ -403,8 +484,11 @@ export default function App() {
                 Search
               </span>
             </button>
-            <button className="p-2 text-stone-400 hover:text-stone-900">
+            <button onClick={openAuthPanel} className="flex items-center gap-2 p-2 text-stone-400 hover:text-stone-900">
               <User className="w-5 h-5" />
+              <span className="hidden sm:inline text-[10px] uppercase tracking-[0.2em]">
+                {user ? "Account" : "Login"}
+              </span>
             </button>
             <button
               onClick={() => setCartOpen(true)}
@@ -416,6 +500,82 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {authPanelOpen && (
+        <div className="bg-stone-50 border-b border-stone-200 px-6 py-6">
+          <div className="mx-auto max-w-5xl grid gap-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-xs uppercase tracking-[0.3em] font-bold text-stone-600">
+                  {user ? "Account" : "Login or shop as guest"}
+                </div>
+                <div className="text-sm text-stone-500">
+                  {user
+                    ? `Signed in as ${user.email}`
+                    : "Log in to save your order history, or continue as guest."}
+                </div>
+              </div>
+              <button
+                onClick={() => setAuthPanelOpen(false)}
+                className="text-[10px] uppercase tracking-[0.3em] text-stone-500 hover:text-stone-900"
+              >
+                Close
+              </button>
+            </div>
+            {user ? (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm text-stone-700">You are logged in.</div>
+                <button
+                  onClick={handleLogout}
+                  className="w-full sm:w-auto bg-stone-900 text-white uppercase tracking-[0.3em] text-[10px] py-3 px-6 rounded-xl hover:bg-stone-800"
+                >
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                <div className="grid gap-3">
+                  <input
+                    type="email"
+                    value={authEmail}
+                    onChange={(event) => setAuthEmail(event.target.value)}
+                    placeholder="Email"
+                    className="w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-900"
+                  />
+                  <input
+                    type="password"
+                    value={authPassword}
+                    onChange={(event) => setAuthPassword(event.target.value)}
+                    placeholder="Password"
+                    className="w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-900"
+                  />
+                  <button
+                    onClick={handleLogin}
+                    disabled={authLoading}
+                    className="w-full bg-stone-900 text-white uppercase tracking-[0.3em] text-[10px] py-3 px-6 rounded-xl hover:bg-stone-800 disabled:opacity-50"
+                  >
+                    {authLoading ? "Signing in…" : "Log in"}
+                  </button>
+                </div>
+                <div className="grid gap-3">
+                  <button
+                    onClick={shopAsGuest}
+                    className="w-full bg-white border border-stone-300 text-stone-900 uppercase tracking-[0.3em] text-[10px] py-3 px-6 rounded-xl hover:border-stone-400"
+                  >
+                    Shop as guest
+                  </button>
+                  <div className="text-sm text-stone-500">
+                    Use the same checkout flow without signing in. Your order will still be created normally.
+                  </div>
+                </div>
+              </div>
+            )}
+            {authMessage && (
+              <div className="text-sm text-stone-600">{authMessage}</div>
+            )}
+          </div>
+        </div>
+      )}
 
       <main className="flex-grow">
         {view === "home" && (
